@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -106,6 +107,83 @@ func TestHandlerSaveExpense(t *testing.T) {
 
 		if assert.NoError(t, err) {
 			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Equal(t, want, strings.TrimSpace(rec.Body.String()))
+		}
+	})
+}
+
+func TestHandlerGetExpenseByID(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	columns := []string{"id", "amount", "title", "note", "tags"}
+	e := echo.New()
+	svc := track.NewService(db)
+	h := &handler{svc}
+
+	t.Run("GetExpenseByID()", func(t *testing.T) {
+		exp := track.Expense{
+			ID:     2,
+			Amount: 105,
+			Title:  "strawberry",
+			Note:   "night",
+			Tags:   []string{"food", "beverage"},
+		}
+
+		rows := sqlmock.NewRows(columns).AddRow(exp.ID, exp.Amount, exp.Title, exp.Note, pq.Array(exp.Tags))
+		mock.ExpectQuery("SELECT (.+) FROM expenses").WithArgs(exp.ID).WillReturnRows(rows)
+
+		req := httptest.NewRequest(http.MethodGet, "/expenses/:id", nil)
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues(fmt.Sprintf("%d", exp.ID))
+		want := `{"id":2,"amount":105,"title":"strawberry","note":"night","tags":["food","beverage"]}`
+
+		err = h.GetExpenseByID(c)
+
+		if assert.NoError(t, err) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Equal(t, want, strings.TrimSpace(rec.Body.String()))
+		}
+	})
+
+	t.Run("GetExpenseByID() returns invalid params", func(t *testing.T) {
+		mock.ExpectQuery("SELECT (.+) FROM expenses").WillReturnError(track.ErrNotFound)
+
+		req := httptest.NewRequest(http.MethodGet, "/expenses/:id", nil)
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("A")
+		want := `{"code":400,"message":"invalid params"}`
+		err = h.GetExpenseByID(c)
+
+		if assert.NoError(t, err) {
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Equal(t, want, strings.TrimSpace(rec.Body.String()))
+		}
+	})
+
+	t.Run("GetExpenseByID() returns not found", func(t *testing.T) {
+		mock.ExpectQuery("SELECT (.+) FROM expenses").WillReturnError(track.ErrNotFound)
+
+		req := httptest.NewRequest(http.MethodGet, "/expenses/:id", nil)
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("1")
+		want := `{"code":404,"message":"not found"}`
+		err = h.GetExpenseByID(c)
+
+		if assert.NoError(t, err) {
+			assert.Equal(t, http.StatusNotFound, rec.Code)
 			assert.Equal(t, want, strings.TrimSpace(rec.Body.String()))
 		}
 	})

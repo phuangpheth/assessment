@@ -24,6 +24,7 @@ func NewHandler(router *echo.Echo, svc *track.Service) error {
 	router.POST("/expenses", h.SaveExpense)
 	router.PUT("/expenses/:id", h.UpdateExpense)
 	router.GET("/expenses/:id", h.GetExpenseByID)
+	router.GET("/expenses", h.ListExpenses)
 	return nil
 }
 
@@ -117,4 +118,16 @@ func (h *handler) GetExpenseByID(c echo.Context) error {
 		})
 	}
 	return c.JSON(http.StatusOK, exp)
+}
+
+func (h *handler) ListExpenses(c echo.Context) error {
+	ctx := c.Request().Context()
+	exps, err := h.expenseSvc.List(ctx)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{
+			"code":    http.StatusInternalServerError,
+			"message": "Internal Server Error",
+		})
+	}
+	return c.JSON(http.StatusOK, exps)
 }

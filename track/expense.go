@@ -36,6 +36,21 @@ func (s *Service) Save(ctx context.Context, e *Expense) (*Expense, error) {
 	return e, nil
 }
 
+func (s *Service) Update(ctx context.Context, e *Expense) (*Expense, error) {
+	exp, err := getExpenseByID(ctx, s.db, e.ID)
+	if err != nil {
+		return nil, fmt.Errorf("getExpenseByID(%d): %w", e.ID, err)
+	}
+	exp.Amount = e.Amount
+	exp.Title = e.Title
+	exp.Note = e.Note
+	exp.Tags = e.Tags
+	if err := updateExpense(ctx, s.db, exp); err != nil {
+		return nil, fmt.Errorf("updateExpense(): %w", err)
+	}
+	return exp, nil
+}
+
 func (s *Service) GetByID(ctx context.Context, id int64) (*Expense, error) {
 	exp, err := getExpenseByID(ctx, s.db, id)
 	if err != nil {
@@ -93,6 +108,24 @@ func createExpense(ctx context.Context, db *sql.DB, e *Expense) error {
 		&e.Note,
 		pq.Array(&e.Tags),
 	); err != nil {
+		return err
+	}
+	return nil
+}
+
+func updateExpense(ctx context.Context, db *sql.DB, e *Expense) error {
+	query, args, err := sq.Update("expenses").
+		Set("amount", e.Amount).
+		Set("title", e.Title).
+		Set("note", e.Note).
+		Set("tags", pq.Array(e.Tags)).
+		Where(sq.Eq{"id": e.ID}).
+		PlaceholderFormat(sq.Dollar).
+		ToSql()
+	if err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, query, args...); err != nil {
 		return err
 	}
 	return nil

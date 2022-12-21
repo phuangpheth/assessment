@@ -22,6 +22,7 @@ func NewHandler(router *echo.Echo, svc *track.Service) error {
 	}
 
 	router.POST("/expenses", h.SaveExpense)
+	router.PUT("/expenses/:id", h.UpdateExpense)
 	router.GET("/expenses/:id", h.GetExpenseByID)
 	return nil
 }
@@ -50,6 +51,47 @@ func (h *handler) SaveExpense(c echo.Context) error {
 		})
 	}
 	return c.JSON(http.StatusCreated, expense)
+}
+
+func (h *handler) UpdateExpense(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"code":    http.StatusBadRequest,
+			"message": "invalid params",
+		})
+	}
+
+	var exp track.Expense
+	if err := c.Bind(&exp); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"code":    http.StatusBadRequest,
+			"message": "invalid request body",
+		})
+	}
+	if err := exp.Validate(); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"code":    http.StatusBadRequest,
+			"message": err.Error(),
+		})
+	}
+
+	ctx := c.Request().Context()
+	exp.ID = id
+	ex, err := h.expenseSvc.Update(ctx, &exp)
+	if errors.Is(err, track.ErrNotFound) {
+		return c.JSON(http.StatusNotFound, echo.Map{
+			"code":    http.StatusNotFound,
+			"message": errors.Unwrap(err).Error(),
+		})
+	}
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{
+			"code":    http.StatusInternalServerError,
+			"message": "Internal Server Error: ",
+		})
+	}
+	return c.JSON(http.StatusOK, ex)
 }
 
 func (h *handler) GetExpenseByID(c echo.Context) error {

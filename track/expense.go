@@ -59,6 +59,14 @@ func (s *Service) GetByID(ctx context.Context, id int64) (*Expense, error) {
 	return exp, nil
 }
 
+func (s *Service) List(ctx context.Context) ([]Expense, error) {
+	exps, err := listExpenses(ctx, s.db)
+	if err != nil {
+		return nil, fmt.Errorf("listExpenses(): %w", err)
+	}
+	return exps, nil
+}
+
 type Expense struct {
 	ID     int64    `json:"id"`
 	Amount float64  `json:"amount"`
@@ -151,6 +159,35 @@ func getExpenseByID(ctx context.Context, db *sql.DB, id int64) (*Expense, error)
 		return nil, err
 	}
 	return &e, nil
+}
+
+func listExpenses(ctx context.Context, db *sql.DB) ([]Expense, error) {
+	query, args, err := sq.Select(expenseColumns...).
+		From("expenses").
+		OrderBy("id DESC").
+		PlaceholderFormat(sq.Dollar).
+		ToSql()
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	exps := make([]Expense, 0)
+	for rows.Next() {
+		e, err := scanExpense(rows.Scan)
+		if err != nil {
+			return nil, err
+		}
+		exps = append(exps, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return exps, nil
 }
 
 var expenseColumns = []string{

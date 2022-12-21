@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/labstack/echo/v4"
 	"github.com/phuangpheth/assessment/track"
@@ -21,6 +22,7 @@ func NewHandler(router *echo.Echo, svc *track.Service) error {
 	}
 
 	router.POST("/expenses", h.SaveExpense)
+	router.GET("/expenses/:id", h.GetExpenseByID)
 	return nil
 }
 
@@ -48,4 +50,29 @@ func (h *handler) SaveExpense(c echo.Context) error {
 		})
 	}
 	return c.JSON(http.StatusCreated, expense)
+}
+
+func (h *handler) GetExpenseByID(c echo.Context) error {
+	ctx := c.Request().Context()
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{
+			"code":    http.StatusBadRequest,
+			"message": "invalid params",
+		})
+	}
+	exp, err := h.expenseSvc.GetByID(ctx, id)
+	if errors.Is(err, track.ErrNotFound) {
+		return c.JSON(http.StatusNotFound, echo.Map{
+			"code":    http.StatusNotFound,
+			"message": errors.Unwrap(err).Error(),
+		})
+	}
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{
+			"code":    http.StatusInternalServerError,
+			"message": "Internal Server Error : ",
+		})
+	}
+	return c.JSON(http.StatusOK, exp)
 }

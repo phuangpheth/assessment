@@ -112,6 +112,130 @@ func TestHandlerSaveExpense(t *testing.T) {
 	})
 }
 
+func TestHandlerUpdateExpense(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	columns := []string{"id", "amount", "title", "note", "tags"}
+	e := echo.New()
+	svc := track.NewService(db)
+	h := &handler{svc}
+
+	t.Run("UpdateExpense()", func(t *testing.T) {
+		exp := track.Expense{
+			ID:     1,
+			Amount: 75,
+			Title:  "Halo Kitty",
+			Note:   "buy tea",
+			Tags:   []string{"drinks", "juices"},
+		}
+
+		rows := sqlmock.NewRows(columns).AddRow(exp.ID, exp.Amount, exp.Title, exp.Note, pq.Array(exp.Tags))
+		mock.ExpectQuery("SELECT (.+) FROM expenses").WithArgs(exp.ID).WillReturnRows(rows)
+
+		mock.ExpectExec(`UPDATE expenses`).
+			WithArgs(exp.Amount, exp.Title, exp.Note, pq.Array(exp.Tags), exp.ID).
+			WillReturnResult(sqlmock.NewResult(exp.ID, 1))
+
+		byt, _ := json.Marshal(exp)
+		req := httptest.NewRequest(http.MethodPost, "/expenses/:id", strings.NewReader(string(byt)))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("1")
+		want := `{"id":1,"amount":75,"title":"Halo Kitty","note":"buy tea","tags":["drinks","juices"]}`
+
+		err = h.UpdateExpense(c)
+
+		if assert.NoError(t, err) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Equal(t, want, strings.TrimSpace(rec.Body.String()))
+		}
+	})
+
+	t.Run("UpdateExpense() returns invalid params", func(t *testing.T) {
+		body := `
+			{
+				"amount": 79,
+				"title": "strawberry smoothie",
+				"note": "night market promotion discount 10 bath",
+				"tags": []
+			}
+		`
+		req := httptest.NewRequest(http.MethodPost, "/expenses/:id", strings.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("A")
+		want := `{"code":400,"message":"invalid params"}`
+
+		err = h.UpdateExpense(c)
+
+		if assert.NoError(t, err) {
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Equal(t, want, strings.TrimSpace(rec.Body.String()))
+		}
+	})
+
+	t.Run("UpdateExpense() returns invalid request body", func(t *testing.T) {
+		body := `
+			{
+				"amount": "79",
+				"title": "strawberry smoothie",
+				"note": "night market promotion discount 10 bath",
+				"tags": ""
+			}
+		`
+		req := httptest.NewRequest(http.MethodPost, "/expenses/:id", strings.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("1")
+		want := `{"code":400,"message":"invalid request body"}`
+
+		err = h.UpdateExpense(c)
+
+		if assert.NoError(t, err) {
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Equal(t, want, strings.TrimSpace(rec.Body.String()))
+		}
+	})
+
+	t.Run("UpdateExpense() returns mot found", func(t *testing.T) {
+		exp := track.Expense{
+			ID:     1,
+			Amount: 75,
+			Title:  "Halo Kitty",
+			Note:   "buy tea",
+			Tags:   []string{"drinks", "juices"},
+		}
+
+		mock.ExpectQuery("SELECT (.+) FROM expenses").WithArgs(exp.ID).WillReturnError(track.ErrNotFound)
+
+		byt, _ := json.Marshal(exp)
+		req := httptest.NewRequest(http.MethodPost, "/expenses/:id", strings.NewReader(string(byt)))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("id")
+		c.SetParamValues("1")
+		want := `{"code":404,"message":"not found"}`
+
+		err = h.UpdateExpense(c)
+
+		if assert.NoError(t, err) {
+			assert.Equal(t, http.StatusNotFound, rec.Code)
+			assert.Equal(t, want, strings.TrimSpace(rec.Body.String()))
+		}
+	})
+}
+
 func TestHandlerGetExpenseByID(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {

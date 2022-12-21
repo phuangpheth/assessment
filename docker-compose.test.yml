@@ -1,0 +1,27 @@
+version: '3.2'
+
+networks:
+  integration-test:
+
+services:
+  it_tests:
+    build: 
+      context: .
+      dockerfile: ./Dockerfile.test
+    volumes:
+      - $PWD:/test
+    depends_on:
+      - db_save
+    networks:
+      - integration-test
+  db_save:
+    image: postgres:12.12
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: expenses_test
+    restart: on-failure
+    volumes:
+      - ./migrations:/docker-entrypoint-initdb.d/
+    networks:
+      - integration-test

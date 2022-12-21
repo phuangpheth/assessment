@@ -312,3 +312,54 @@ func TestHandlerGetExpenseByID(t *testing.T) {
 		}
 	})
 }
+
+func TestHandlerListExpenses(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	columns := []string{"id", "amount", "title", "note", "tags"}
+	e := echo.New()
+	svc := track.NewService(db)
+	h := &handler{svc}
+
+	t.Run("ListExpenses()", func(t *testing.T) {
+		exps := []track.Expense{
+			{
+				ID:     2,
+				Amount: 65,
+				Title:  "Ice Milk",
+				Note:   "",
+				Tags:   []string{"drinks", "juices"},
+			},
+			{
+				ID:     3,
+				Amount: 100,
+				Title:  "Ice Chocolate",
+				Note:   "",
+				Tags:   []string{"drinks", "juices"},
+			},
+		}
+
+		rows := sqlmock.NewRows(columns)
+		for _, v := range exps {
+			rows = rows.AddRow(v.ID, v.Amount, v.Title, v.Note, pq.Array(v.Tags))
+		}
+		mock.ExpectQuery("SELECT (.+) FROM expenses").WillReturnRows(rows)
+
+		req := httptest.NewRequest(http.MethodGet, "/expenses", nil)
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		want := `[{"id":2,"amount":65,"title":"Ice Milk","note":"","tags":["drinks","juices"]},{"id":3,"amount":100,"title":"Ice Chocolate","note":"","tags":["drinks","juices"]}]`
+
+		err = h.ListExpenses(c)
+
+		if assert.NoError(t, err) {
+			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Equal(t, want, strings.TrimSpace(rec.Body.String()))
+		}
+	})
+}

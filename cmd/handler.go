@@ -21,10 +21,11 @@ func NewHandler(router *echo.Echo, svc *track.Service) error {
 		expenseSvc: svc,
 	}
 
-	router.POST("/expenses", h.SaveExpense)
-	router.PUT("/expenses/:id", h.UpdateExpense)
-	router.GET("/expenses/:id", h.GetExpenseByID)
-	router.GET("/expenses", h.ListExpenses)
+	r := router.Group("/", Auth)
+	r.POST("expenses", h.SaveExpense)
+	r.PUT("expenses/:id", h.UpdateExpense)
+	r.GET("expenses/:id", h.GetExpenseByID)
+	r.GET("expenses", h.ListExpenses)
 	return nil
 }
 

@@ -190,3 +190,54 @@ func TestGetExpenseByID(t *testing.T) {
 	err = ec.Shutdown(ctx)
 	assert.NoError(t, err)
 }
+
+func TestListExpenses(t *testing.T) {
+	ec := echo.New()
+	go func(e *echo.Echo) {
+		db, err := sql.Open("postgres", "postgresql://root:password@db_list/expenses_test?sslmode=disable")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		svc := track.NewService(db)
+		h := handler{expenseSvc: svc}
+		e.GET("/expenses", h.ListExpenses)
+		e.Start(fmt.Sprintf(":%d", PORT))
+	}(ec)
+	for {
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", PORT), 30*time.Second)
+		if err != nil {
+			log.Println(err)
+		}
+		if conn != nil {
+			conn.Close()
+			break
+		}
+	}
+
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%d/expenses", PORT), nil)
+	assert.NoError(t, err)
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	client := http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	assert.NoError(t, err)
+
+	byt, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
+	resp.Body.Close()
+
+	want := `[{"id":10,"amount":15,"title":"test-title","note":"test-note","tags":["test-tags"]}]`
+
+	if assert.NoError(t, err) {
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, want, strings.TrimSpace(string(byt)))
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	err = ec.Shutdown(ctx)
+	assert.NoError(t, err)
+}

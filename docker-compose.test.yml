@@ -12,9 +12,22 @@ services:
       - $PWD:/test
     depends_on:
       - db_save
+      - db_list
     networks:
       - integration-test
   db_save:
+    image: postgres:12.12
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: expenses_test
+    restart: on-failure
+    volumes:
+      - ./migrations:/docker-entrypoint-initdb.d/
+    networks:
+      - integration-test
+
+  db_list:
     image: postgres:12.12
     environment:
       POSTGRES_USER: root

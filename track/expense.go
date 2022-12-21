@@ -36,6 +36,14 @@ func (s *Service) Save(ctx context.Context, e *Expense) (*Expense, error) {
 	return e, nil
 }
 
+func (s *Service) GetByID(ctx context.Context, id int64) (*Expense, error) {
+	exp, err := getExpenseByID(ctx, s.db, id)
+	if err != nil {
+		return nil, fmt.Errorf("getExpenseByID(%d): %w", id, err)
+	}
+	return exp, nil
+}
+
 type Expense struct {
 	ID     int64    `json:"id"`
 	Amount float64  `json:"amount"`
@@ -88,4 +96,44 @@ func createExpense(ctx context.Context, db *sql.DB, e *Expense) error {
 		return err
 	}
 	return nil
+}
+
+func getExpenseByID(ctx context.Context, db *sql.DB, id int64) (*Expense, error) {
+	query, args, err := sq.Select(expenseColumns...).
+		From("expenses").
+		Where(sq.Eq{"id": id}).
+		Limit(1).
+		PlaceholderFormat(sq.Dollar).
+		ToSql()
+	if err != nil {
+		return nil, err
+	}
+
+	row := db.QueryRowContext(ctx, query, args...)
+	e, err := scanExpense(row.Scan)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
+
+var expenseColumns = []string{
+	"id",
+	"amount",
+	"title",
+	"note",
+	"tags",
+}
+
+func scanExpense(scan func(...any) error) (e Expense, _ error) {
+	return e, scan(
+		&e.ID,
+		&e.Amount,
+		&e.Title,
+		&e.Note,
+		pq.Array(&e.Tags),
+	)
 }

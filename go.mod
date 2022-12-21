@@ -3,6 +3,7 @@ module github.com/phuangpheth/assessment
 go 1.19
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/Masterminds/squirrel v1.5.3
 	github.com/labstack/echo/v4 v4.9.1
 	github.com/lib/pq v1.10.7

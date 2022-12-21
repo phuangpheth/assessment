@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/phuangpheth/assessment/track"
 	"go.uber.org/zap"
 
 	_ "github.com/lib/pq"
@@ -53,7 +54,11 @@ func Execute() {
 	`)
 	failOnError(err, "failed to create table expenses")
 
+	svc := track.NewService(db)
 	e := echo.New()
+
+	err = NewHandler(e, svc)
+	failOnError(err, "failed to create handler")
 
 	errChan := make(chan error, 1)
 	go func() {
